@@ -192,22 +192,18 @@ export default function Home() {
         }
     };
 
-    // Auto-close menu when modal opens
-    useEffect(() => {
-        if (isDeleteModalOpen) {
-            setOpenMenuId(null);
-        }
-    }, [isDeleteModalOpen]);
-
     const confirmDelete = (noteId: string) => {
         setNoteToDelete(noteId);
+        // Note: We deliberately do NOT close the menu here.
+        // Keeping it component mounted ensures the click event finishes propagation properly.
+        // The Modal (z-9999) will simply overlay the menu (z-50).
         setIsDeleteModalOpen(true);
     };
 
     const handleDelete = async () => {
         if (!noteToDelete) return;
 
-        // Explicit menu close for safety
+        // NOW we can safely close the menu as the user has confirmed logic
         setOpenMenuId(null);
 
         try {
@@ -304,7 +300,10 @@ export default function Home() {
             {/* Delete Confirmation Modal */}
             <Modal
                 isOpen={isDeleteModalOpen}
-                onClose={() => setIsDeleteModalOpen(false)}
+                onClose={() => {
+                    setIsDeleteModalOpen(false);
+                    setOpenMenuId(null); // Close menu on cancel
+                }}
                 onConfirm={handleDelete}
                 title="Delete Note"
                 message="Are you sure you want to delete this note? This action cannot be undone."
