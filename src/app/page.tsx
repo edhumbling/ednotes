@@ -193,14 +193,16 @@ export default function Home() {
     };
 
     const confirmDelete = (noteId: string) => {
-        // Stop propagation if we can, but since this is called from handlers that already stop it, just update state
+        // Keep menu open to ensure event completes. Modal will cover it.
         setNoteToDelete(noteId);
-        setOpenMenuId(null); // Close menu immediately
         setIsDeleteModalOpen(true);
     };
 
     const handleDelete = async () => {
         if (!noteToDelete) return;
+
+        // Close menu now
+        setOpenMenuId(null);
 
         try {
             await fetch(`/api/notes/${noteToDelete}`, { method: 'DELETE' });
@@ -296,7 +298,10 @@ export default function Home() {
             {/* Delete Confirmation Modal */}
             <Modal
                 isOpen={isDeleteModalOpen}
-                onClose={() => setIsDeleteModalOpen(false)}
+                onClose={() => {
+                    setIsDeleteModalOpen(false);
+                    setOpenMenuId(null);
+                }}
                 onConfirm={handleDelete}
                 title="Delete Note"
                 message="Are you sure you want to delete this note? This action cannot be undone."
