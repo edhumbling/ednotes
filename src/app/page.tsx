@@ -98,6 +98,18 @@ export default function Home() {
             const res = await fetch('/api/notes');
             const data = await res.json();
             setNotes(data);
+
+            // Attempt to restore last active note
+            const lastId = localStorage.getItem('ednotes-active-id');
+            if (lastId) {
+                const found = data.find((n: Note) => n.id === lastId);
+                if (found) {
+                    // We manually select properly to avoid side-effects like closing sidebar prematurely on load
+                    setActiveNote(found);
+                    setTitle(found.title === 'Untitled' ? '' : found.title);
+                    setContent(found.content);
+                }
+            }
         } catch (error) {
             console.error('Failed to fetch notes:', error);
         } finally {
@@ -108,6 +120,15 @@ export default function Home() {
     useEffect(() => {
         fetchNotes();
     }, []);
+
+    // Persist Active Note ID
+    useEffect(() => {
+        if (activeNote) {
+            localStorage.setItem('ednotes-active-id', activeNote.id);
+        } else {
+            localStorage.removeItem('ednotes-active-id');
+        }
+    }, [activeNote]);
 
     useEffect(() => {
         if (!isLoading && notes.length === 0 && !activeNote) {
