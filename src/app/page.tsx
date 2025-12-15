@@ -8,7 +8,7 @@ import {
     List, ListOrdered, Quote,
     Heading1, Heading2, Type,
     Trash2, Menu, Plus, Check, X,
-    MoreVertical
+    MoreVertical, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 
 interface Note {
@@ -55,17 +55,49 @@ export default function Home() {
     const [content, setContent] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [sidebarOpen, setSidebarOpen] = useState(false);
 
-    // Menu State
+    // Sidebar State
+    const [sidebarOpen, setSidebarOpen] = useState(true); // Default open on desktop
+    const [isMobile, setIsMobile] = useState(false);
+
+    // Menu & Modal State
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-
-    // Modal State
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
 
     const editorRef = useRef<HTMLDivElement>(null);
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        const checkMobile = () => {
+            const mobile = window.innerWidth <= 768;
+            setIsMobile(mobile);
+            if (mobile) setSidebarOpen(false); // Default closed on mobile
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
+    // Format date
+    const formatDate = (dateString: string) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    };
+
+    const getPreview = (html: string) => {
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        const text = div.textContent || div.innerText || '';
+        return text.slice(0, 50) + (text.length > 50 ? '...' : '');
+    };
 
     // --- Data Fetching ---
     const fetchNotes = async () => {
@@ -132,7 +164,7 @@ export default function Home() {
             const newNote = await res.json();
             setNotes(prev => [newNote, ...prev]);
             selectNote(newNote);
-            if (window.innerWidth <= 768) setSidebarOpen(false);
+            if (isMobile) setSidebarOpen(false);
         } catch (error) {
             console.error('Failed to create:', error);
         }
@@ -175,7 +207,7 @@ export default function Home() {
         setTitle(note.title === 'Untitled' ? '' : note.title);
         setContent(note.content);
         if (editorRef.current) editorRef.current.innerHTML = note.content;
-        if (window.innerWidth <= 768) setSidebarOpen(false);
+        if (isMobile) setSidebarOpen(false);
     };
 
     const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -206,6 +238,8 @@ export default function Home() {
         setOpenMenuId(openMenuId === noteId ? null : noteId);
     };
 
+    const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+
     // --- Components ---
     const ToolbarButton = ({ icon: Icon, cmd, val, title }: any) => (
         <button
@@ -221,7 +255,7 @@ export default function Home() {
         <div className="app-container">
             {/* Mobile Sidebar Overlay */}
             <div
-                className={`sidebar-overlay ${sidebarOpen ? 'active' : ''}`}
+                className={`sidebar-overlay ${sidebarOpen && isMobile ? 'active' : ''}`}
                 onClick={() => setSidebarOpen(false)}
             />
 
@@ -244,8 +278,8 @@ export default function Home() {
                 isDanger={true}
             />
 
-            {/* Sidebar */}
-            <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+            {/* Sidebar - Desktop Layout adjusted via CSS classes */}
+            <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'} ${isMobile ? 'mobile' : ''}`}>
                 <div className="sidebar-header">
                     <Image
                         src="https://ik.imagekit.io/humbling/Gemini_Generated_Image_o1mdo6o1mdo6o1md%20(1).png"
@@ -254,9 +288,20 @@ export default function Home() {
                         className="sidebar-logo"
                     />
                     <span className="sidebar-title">Ed&apos;s Notes</span>
-                    <button className="mobile-close-btn" onClick={() => setSidebarOpen(false)}>
-                        <X size={20} />
-                    </button>
+
+                    {/* Desktop Retract Button */}
+                    {!isMobile && (
+                        <button className="desktop-sidebar-toggle" onClick={toggleSidebar}>
+                            <PanelLeftClose size={20} />
+                        </button>
+                    )}
+
+                    {/* Mobile Close Button */}
+                    {isMobile && (
+                        <button className="mobile-close-btn" onClick={() => setSidebarOpen(false)}>
+                            <X size={20} />
+                        </button>
+                    )}
                 </div>
 
                 <div className="sidebar-actions">
@@ -277,6 +322,8 @@ export default function Home() {
                                 <div className="note-item-preview">
                                     {note.content ? note.content.replace(/<[^>]*>/g, '') : 'No content'}
                                 </div>
+                                {/* Date in Sidebar */}
+                                <div className="note-item-date">{formatDate(note.updatedAt)}</div>
                             </div>
 
                             <button
@@ -311,11 +358,18 @@ export default function Home() {
                 {activeNote ? (
                     <>
                         <header className="editor-header">
-                            {/* Only menu button and delete action here now */}
-                            <div className="flex items-center">
+                            <div className="flex items-center gap-3">
+                                {/* Mobile Menu Button */}
                                 <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
                                     <Menu size={24} />
                                 </button>
+
+                                {/* Desktop Expand Button (when sidebar closed) */}
+                                {!sidebarOpen && !isMobile && (
+                                    <button className="desktop-sidebar-toggle-open" onClick={toggleSidebar}>
+                                        <PanelLeftOpen size={20} />
+                                    </button>
+                                )}
                             </div>
 
                             <div className="editor-actions">
@@ -354,7 +408,7 @@ export default function Home() {
                         </div>
 
                         <div className="editor-content">
-                            {/* New Separate Title Block */}
+                            {/* Title Block */}
                             <div className="title-block">
                                 <input
                                     value={title}
@@ -362,6 +416,10 @@ export default function Home() {
                                     placeholder="Note Title"
                                     className="title-input-large"
                                 />
+                                {/* Date in Editor */}
+                                <div className="note-meta">
+                                    {formatDate(activeNote.updatedAt)} • {activeNote.content ? activeNote.content.length : 0} characters
+                                </div>
                             </div>
 
                             <div
@@ -390,6 +448,16 @@ export default function Home() {
                                 width={32} height={32}
                             />
                         </div>
+
+                        {/* Desktop Expand Button when sidebar closed */}
+                        {!sidebarOpen && !isMobile && (
+                            <div style={{ position: 'absolute', top: 16, left: 16 }}>
+                                <button className="desktop-sidebar-toggle-open" onClick={toggleSidebar}>
+                                    <PanelLeftOpen size={20} />
+                                </button>
+                            </div>
+                        )}
+
                         <p>Select a note or create a new one</p>
                         <button className="new-note-btn" style={{ width: 'auto', padding: '10px 24px' }} onClick={createNewNote}>
                             Create Note
