@@ -193,10 +193,10 @@ export default function Home() {
     };
 
     const confirmDelete = (noteId: string) => {
-        console.log('Confirm delete called for:', noteId);
+        // Stop propagation if we can, but since this is called from handlers that already stop it, just update state
         setNoteToDelete(noteId);
+        setOpenMenuId(null); // Close menu immediately
         setIsDeleteModalOpen(true);
-        setTimeout(() => setOpenMenuId(null), 100);
     };
 
     const handleDelete = async () => {
