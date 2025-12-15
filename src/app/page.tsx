@@ -7,7 +7,8 @@ import {
     AlignLeft, AlignCenter, AlignRight,
     List, ListOrdered, Quote,
     Heading1, Heading2, Type,
-    Trash2, Menu, Plus, Check
+    Trash2, Menu, Plus, Check, X,
+    MoreVertical
 } from 'lucide-react';
 
 interface Note {
@@ -18,6 +19,35 @@ interface Note {
     updatedAt: string;
 }
 
+// Custom Modal Component
+interface ModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    isDanger?: boolean;
+}
+
+const Modal = ({ isOpen, onClose, onConfirm, title, message, confirmText = 'Confirm', cancelText = 'Cancel', isDanger = false }: ModalProps) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="modal-overlay">
+            <div className="modal-content">
+                <h3 className="modal-title">{title}</h3>
+                <p className="modal-message">{message}</p>
+                <div className="modal-actions">
+                    <button className="modal-btn cancel" onClick={onClose}>{cancelText}</button>
+                    <button className={`modal-btn ${isDanger ? 'danger' : 'primary'}`} onClick={onConfirm}>{confirmText}</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default function Home() {
     const [notes, setNotes] = useState<Note[]>([]);
     const [activeNote, setActiveNote] = useState<Note | null>(null);
@@ -26,6 +56,13 @@ export default function Home() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    // Menu State
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+    // Modal State
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
 
     const editorRef = useRef<HTMLDivElement>(null);
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -69,8 +106,6 @@ export default function Home() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title: noteTitle || 'Untitled', content: noteContent }),
             });
-            // Refresh list to show updated snippets/time without full re-fetch if possible, 
-            // but for now simple re-fetch works best for consistency
             fetchNotes();
         } catch (error) {
             console.error('Failed to save note:', error);
@@ -103,13 +138,21 @@ export default function Home() {
         }
     };
 
-    const deleteNote = async (noteId: string) => {
-        if (!confirm("Are you sure you want to delete this note?")) return;
+    const confirmDelete = (noteId: string) => {
+        setNoteToDelete(noteId);
+        setOpenMenuId(null);
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleDelete = async () => {
+        if (!noteToDelete) return;
+
         try {
-            await fetch(`/api/notes/${noteId}`, { method: 'DELETE' });
-            const remaining = notes.filter(n => n.id !== noteId);
+            await fetch(`/api/notes/${noteToDelete}`, { method: 'DELETE' });
+            const remaining = notes.filter(n => n.id !== noteToDelete);
             setNotes(remaining);
-            if (activeNote?.id === noteId) {
+
+            if (activeNote?.id === noteToDelete) {
                 if (remaining.length > 0) {
                     selectNote(remaining[0]);
                 } else {
@@ -121,6 +164,9 @@ export default function Home() {
             }
         } catch (error) {
             console.error('Failed to delete:', error);
+        } finally {
+            setIsDeleteModalOpen(false);
+            setNoteToDelete(null);
         }
     };
 
@@ -155,6 +201,11 @@ export default function Home() {
         handleContentInput();
     };
 
+    const toggleMenu = (e: React.MouseEvent, noteId: string) => {
+        e.stopPropagation();
+        setOpenMenuId(openMenuId === noteId ? null : noteId);
+    };
+
     // --- Components ---
     const ToolbarButton = ({ icon: Icon, cmd, val, title }: any) => (
         <button
@@ -174,6 +225,25 @@ export default function Home() {
                 onClick={() => setSidebarOpen(false)}
             />
 
+            {/* Global Backdrop to Close Menus */}
+            {openMenuId && (
+                <div
+                    className="dropdown-backdrop"
+                    onClick={() => setOpenMenuId(null)}
+                />
+            )}
+
+            {/* Delete Confirmation Modal */}
+            <Modal
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                onConfirm={handleDelete}
+                title="Delete Note"
+                message="Are you sure you want to delete this note? This action cannot be undone."
+                confirmText="Delete"
+                isDanger={true}
+            />
+
             {/* Sidebar */}
             <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
                 <div className="sidebar-header">
@@ -184,6 +254,9 @@ export default function Home() {
                         className="sidebar-logo"
                     />
                     <span className="sidebar-title">Ed&apos;s Notes</span>
+                    <button className="mobile-close-btn" onClick={() => setSidebarOpen(false)}>
+                        <X size={20} />
+                    </button>
                 </div>
 
                 <div className="sidebar-actions">
@@ -199,10 +272,35 @@ export default function Home() {
                             className={`note-item ${activeNote?.id === note.id ? 'active' : ''}`}
                             onClick={() => selectNote(note)}
                         >
-                            <div className="note-item-title">{note.title || 'Untitled'}</div>
-                            <div className="note-item-preview">
-                                {note.content ? note.content.replace(/<[^>]*>/g, '') : 'No content'}
+                            <div className="note-item-content">
+                                <div className="note-item-title">{note.title || 'Untitled'}</div>
+                                <div className="note-item-preview">
+                                    {note.content ? note.content.replace(/<[^>]*>/g, '') : 'No content'}
+                                </div>
                             </div>
+
+                            <button
+                                className={`note-actions-btn ${openMenuId === note.id ? 'active' : ''}`}
+                                onClick={(e) => toggleMenu(e, note.id)}
+                            >
+                                <MoreVertical size={16} />
+                            </button>
+
+                            {/* Dropdown */}
+                            {openMenuId === note.id && (
+                                <div className="dropdown-menu" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                        className="dropdown-item danger"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            confirmDelete(note.id);
+                                        }}
+                                    >
+                                        <Trash2 size={14} /> Delete
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -213,20 +311,18 @@ export default function Home() {
                 {activeNote ? (
                     <>
                         <header className="editor-header">
-                            <div className="flex items-center gap-2">
+                            {/* Only menu button and delete action here now */}
+                            <div className="flex items-center">
                                 <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
                                     <Menu size={24} />
                                 </button>
-                                <input
-                                    value={title}
-                                    onChange={handleTitleChange}
-                                    placeholder="Note Title"
-                                    className="editor-title-input"
-                                />
                             </div>
-                            <button className="icon-btn danger" onClick={() => deleteNote(activeNote.id)}>
-                                <Trash2 size={18} />
-                            </button>
+
+                            <div className="editor-actions">
+                                <button className="icon-btn danger" onClick={() => confirmDelete(activeNote.id)}>
+                                    <Trash2 size={18} />
+                                </button>
+                            </div>
                         </header>
 
                         {/* Seamless Toolbar */}
@@ -258,6 +354,16 @@ export default function Home() {
                         </div>
 
                         <div className="editor-content">
+                            {/* New Separate Title Block */}
+                            <div className="title-block">
+                                <input
+                                    value={title}
+                                    onChange={handleTitleChange}
+                                    placeholder="Note Title"
+                                    className="title-input-large"
+                                />
+                            </div>
+
                             <div
                                 ref={editorRef}
                                 className="rich-editor"
@@ -274,9 +380,16 @@ export default function Home() {
                     </>
                 ) : (
                     <div className="empty-state">
-                        <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
-                            <Menu size={32} />
-                        </button>
+                        <div className="mobile-header-placeholder">
+                            <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
+                                <Menu size={24} />
+                            </button>
+                            <Image
+                                src="https://ik.imagekit.io/humbling/Gemini_Generated_Image_o1mdo6o1mdo6o1md%20(1).png"
+                                alt="Logo"
+                                width={32} height={32}
+                            />
+                        </div>
                         <p>Select a note or create a new one</p>
                         <button className="new-note-btn" style={{ width: 'auto', padding: '10px 24px' }} onClick={createNewNote}>
                             Create Note
