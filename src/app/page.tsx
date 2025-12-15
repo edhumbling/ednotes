@@ -311,45 +311,75 @@ export default function Home() {
                 </div>
 
                 <div className="notes-list">
-                    {notes.map(note => (
-                        <div
-                            key={note.id}
-                            className={`note-item ${activeNote?.id === note.id ? 'active' : ''}`}
-                            onClick={() => selectNote(note)}
-                        >
-                            <div className="note-item-content">
-                                <div className="note-item-title">{note.title || 'Untitled'}</div>
-                                <div className="note-item-preview">
-                                    {note.content ? note.content.replace(/<[^>]*>/g, '') : 'No content'}
-                                </div>
-                                {/* Date in Sidebar */}
-                                <div className="note-item-date">{formatDate(note.updatedAt)}</div>
-                            </div>
+                    {(() => {
+                        const now = new Date();
+                        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                        const yesterday = today - 86400000;
+                        const lastWeek = today - 86400000 * 7;
+                        const lastMonth = today - 86400000 * 30;
 
-                            <button
-                                className={`note-actions-btn ${openMenuId === note.id ? 'active' : ''}`}
-                                onClick={(e) => toggleMenu(e, note.id)}
-                            >
-                                <MoreVertical size={16} />
-                            </button>
+                        const groups: { [key: string]: Note[] } = {
+                            'Today': [],
+                            'Yesterday': [],
+                            'Last 7 Days': [],
+                            'This Month': [],
+                            'Older': []
+                        };
 
-                            {/* Dropdown */}
-                            {openMenuId === note.id && (
-                                <div className="dropdown-menu" onClick={(e) => e.stopPropagation()}>
-                                    <button
-                                        className="dropdown-item danger"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            confirmDelete(note.id);
-                                        }}
-                                    >
-                                        <Trash2 size={14} /> Delete
-                                    </button>
+                        notes.forEach(note => {
+                            const noteDate = new Date(note.updatedAt).getTime();
+                            if (noteDate >= today) groups['Today'].push(note);
+                            else if (noteDate >= yesterday) groups['Yesterday'].push(note);
+                            else if (noteDate >= lastWeek) groups['Last 7 Days'].push(note);
+                            else if (noteDate >= lastMonth) groups['This Month'].push(note);
+                            else groups['Older'].push(note);
+                        });
+
+                        return Object.entries(groups).map(([label, groupNotes]) => (
+                            groupNotes.length > 0 && (
+                                <div key={label} className="notes-group">
+                                    <div className="notes-group-label">{label}</div>
+                                    {groupNotes.map(note => (
+                                        <div
+                                            key={note.id}
+                                            className={`note-item ${activeNote?.id === note.id ? 'active' : ''}`}
+                                            onClick={() => selectNote(note)}
+                                        >
+                                            <div className="note-item-content">
+                                                <div className="note-item-title">{note.title || 'Untitled'}</div>
+                                                <div className="note-item-preview">
+                                                    {note.content ? note.content.replace(/<[^>]*>/g, '') : 'No content'}
+                                                </div>
+                                                <div className="note-item-date">{formatDate(note.updatedAt)}</div>
+                                            </div>
+
+                                            <button
+                                                className={`note-actions-btn ${openMenuId === note.id ? 'active' : ''}`}
+                                                onClick={(e) => toggleMenu(e, note.id)}
+                                            >
+                                                <MoreVertical size={16} />
+                                            </button>
+
+                                            {openMenuId === note.id && (
+                                                <div className="dropdown-menu" onClick={(e) => e.stopPropagation()}>
+                                                    <button
+                                                        className="dropdown-item danger"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            confirmDelete(note.id);
+                                                        }}
+                                                    >
+                                                        <Trash2 size={14} /> Delete
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
-                            )}
-                        </div>
-                    ))}
+                            )
+                        ));
+                    })()}
                 </div>
             </aside>
 

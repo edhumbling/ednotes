@@ -789,3 +789,18 @@ body {
 .save-status.visible {
     opacity: 1;
 }
+
+/* Notes Grouping */
+.notes-group {
+    margin-bottom: 24px;
+}
+
+.notes-group-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 8px 12px;
+    margin-bottom: 4px;
+}
