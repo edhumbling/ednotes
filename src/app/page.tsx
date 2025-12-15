@@ -7,7 +7,7 @@ import {
     AlignLeft, AlignCenter, AlignRight,
     List, ListOrdered, Quote,
     Heading1, Heading2, Type,
-    Trash2, Menu, Plus, Check, X,
+    Trash2, Menu, Plus, X,
     MoreVertical, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 
@@ -57,7 +57,7 @@ export default function Home() {
     const [isSaving, setIsSaving] = useState(false);
 
     // Sidebar State
-    const [sidebarOpen, setSidebarOpen] = useState(true); // Default open on desktop
+    const [sidebarOpen, setSidebarOpen] = useState(true);
     const [isMobile, setIsMobile] = useState(false);
 
     // Menu & Modal State
@@ -72,7 +72,7 @@ export default function Home() {
         const checkMobile = () => {
             const mobile = window.innerWidth <= 768;
             setIsMobile(mobile);
-            if (mobile) setSidebarOpen(false); // Default closed on mobile
+            if (mobile) setSidebarOpen(false);
         };
         checkMobile();
         window.addEventListener('resize', checkMobile);
@@ -90,13 +90,6 @@ export default function Home() {
             hour: '2-digit',
             minute: '2-digit',
         });
-    };
-
-    const getPreview = (html: string) => {
-        const div = document.createElement('div');
-        div.innerHTML = html;
-        const text = div.textContent || div.innerText || '';
-        return text.slice(0, 50) + (text.length > 50 ? '...' : '');
     };
 
     // --- Data Fetching ---
@@ -171,9 +164,10 @@ export default function Home() {
     };
 
     const confirmDelete = (noteId: string) => {
+        console.log('Confirm delete called for:', noteId);
         setNoteToDelete(noteId);
-        setOpenMenuId(null);
         setIsDeleteModalOpen(true);
+        setTimeout(() => setOpenMenuId(null), 100);
     };
 
     const handleDelete = async () => {
@@ -278,16 +272,31 @@ export default function Home() {
                 isDanger={true}
             />
 
-            {/* Sidebar - Desktop Layout adjusted via CSS classes */}
+            {/* Sidebar */}
             <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'} ${isMobile ? 'mobile' : ''}`}>
                 <div className="sidebar-header">
-                    <Image
-                        src="https://ik.imagekit.io/humbling/Gemini_Generated_Image_o1mdo6o1mdo6o1md%20(1).png"
-                        alt="Logo"
-                        width={32} height={32}
-                        className="sidebar-logo"
-                    />
-                    <span className="sidebar-title">Ed&apos;s Notes</span>
+                    <div
+                        className="flex flex-row items-center gap-3 cursor-pointer select-none"
+                        style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, whiteSpace: 'nowrap' }}
+                        onClick={() => {
+                            setActiveNote(null);
+                            setTitle('');
+                            setContent('');
+                            if (editorRef.current) editorRef.current.innerHTML = '';
+                            if (isMobile) setSidebarOpen(false);
+                        }}
+                    >
+                        <div style={{ position: 'relative', width: 32, height: 32, flexShrink: 0 }}>
+                            <Image
+                                src="https://ik.imagekit.io/humbling/Gemini_Generated_Image_o1mdo6o1mdo6o1md%20(1).png"
+                                alt="Logo"
+                                fill
+                                className="sidebar-logo"
+                                style={{ objectFit: 'cover', borderRadius: '0px' }}
+                            />
+                        </div>
+                        <span className="sidebar-title flex-1 truncate text-base font-semibold">Ed&apos;s Notes</span>
+                    </div>
 
                     {/* Desktop Retract Button */}
                     {!isMobile && (
@@ -385,41 +394,55 @@ export default function Home() {
 
             {/* Main Content */}
             <main className="editor-container">
+                {/* Global Editor Header - Always Visible */}
+                <header className="editor-header relative" style={{ position: 'relative' }}>
+                    <div className="flex items-center gap-3 z-10">
+                        {/* Mobile Menu Button */}
+                        <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
+                            <Menu size={24} />
+                        </button>
+
+                        {/* Desktop Expand Button (when sidebar closed) */}
+                        {!sidebarOpen && !isMobile && (
+                            <button className="desktop-sidebar-toggle-open" onClick={toggleSidebar}>
+                                <PanelLeftOpen size={20} />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Absolute Centered Logo */}
+                    <div style={{
+                        position: 'absolute',
+                        left: '50%',
+                        top: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 50,
+                        pointerEvents: 'none'
+                    }}>
+                        <Image
+                            src="https://ik.imagekit.io/humbling/Gemini_Generated_Image_o1mdo6o1mdo6o1md%20(1).png"
+                            alt="Logo"
+                            width={36} height={36}
+                            className="sidebar-logo"
+                            style={{ borderRadius: '0px' }}
+                            priority
+                        />
+                    </div>
+
+                    <div className="editor-actions z-10" style={{ marginLeft: 'auto' }}>
+                        {activeNote && (
+                            <button className="icon-btn danger" onClick={() => confirmDelete(activeNote.id)}>
+                                <Trash2 size={18} />
+                            </button>
+                        )}
+                    </div>
+                </header>
+
                 {activeNote ? (
                     <>
-                        <header className="editor-header">
-                            <div className="flex items-center gap-3" style={{ width: '60px' }}> {/* Fixed width for balance */}
-                                {/* Mobile Menu Button */}
-                                <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
-                                    <Menu size={24} />
-                                </button>
-
-                                {/* Desktop Expand Button (when sidebar closed) */}
-                                {!sidebarOpen && !isMobile && (
-                                    <button className="desktop-sidebar-toggle-open" onClick={toggleSidebar}>
-                                        <PanelLeftOpen size={20} />
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Centered Logo */}
-                            <div className="flex-1 flex justify-center items-center pointer-events-none select-none">
-                                <Image
-                                    src="https://ik.imagekit.io/humbling/Gemini_Generated_Image_o1mdo6o1mdo6o1md%20(1).png"
-                                    alt="Logo"
-                                    width={28} height={28}
-                                    className="sidebar-logo"
-                                    style={{ opacity: 0.8 }}
-                                />
-                            </div>
-
-                            <div className="editor-actions" style={{ width: '60px', justifyContent: 'flex-end' }}> {/* Fixed width to balance left side */}
-                                <button className="icon-btn danger" onClick={() => confirmDelete(activeNote.id)}>
-                                    <Trash2 size={18} />
-                                </button>
-                            </div>
-                        </header>
-
                         {/* Seamless Toolbar */}
                         <div className="toolbar">
                             <div className="toolbar-group">
@@ -445,6 +468,7 @@ export default function Home() {
                                 <ToolbarButton icon={Heading2} cmd="formatBlock" val="h2" title="Heading 2" />
                                 <ToolbarButton icon={Type} cmd="formatBlock" val="p" title="Paragraph" />
                             </div>
+
                             <div className="toolbar-group">
                                 <ToolbarButton icon={List} cmd="insertUnorderedList" title="Bullet List" />
                                 <ToolbarButton icon={ListOrdered} cmd="insertOrderedList" title="Numbered List" />
@@ -489,26 +513,7 @@ export default function Home() {
                     </>
                 ) : (
                     <div className="empty-state">
-                        <div className="mobile-header-placeholder">
-                            <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
-                                <Menu size={24} />
-                            </button>
-                            <Image
-                                src="https://ik.imagekit.io/humbling/Gemini_Generated_Image_o1mdo6o1mdo6o1md%20(1).png"
-                                alt="Logo"
-                                width={32} height={32}
-                            />
-                        </div>
-
-                        {/* Desktop Expand Button when sidebar closed */}
-                        {!sidebarOpen && !isMobile && (
-                            <div style={{ position: 'absolute', top: 16, left: 16 }}>
-                                <button className="desktop-sidebar-toggle-open" onClick={toggleSidebar}>
-                                    <PanelLeftOpen size={20} />
-                                </button>
-                            </div>
-                        )}
-
+                        {/* No logo here, it's in the header now */}
                         <p>Select a note or create a new one</p>
                         <button className="new-note-btn" style={{ width: 'auto', padding: '10px 24px' }} onClick={createNewNote}>
                             Create Note
