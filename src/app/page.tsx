@@ -497,10 +497,6 @@ export default function Home() {
                                     placeholder="Note Title"
                                     className="title-input-large"
                                 />
-                                {/* Date in Editor */}
-                                <div className="note-meta">
-                                    {formatDate(activeNote.updatedAt)} • {activeNote.content ? activeNote.content.length : 0} characters
-                                </div>
                             </div>
 
                             <div
@@ -511,6 +507,11 @@ export default function Home() {
                                 onInput={handleContentInput}
                                 data-placeholder="Start writing..."
                             />
+
+                            {/* Note Meta Info Footer */}
+                            <div className="note-meta mt-12 pt-6 border-t border-[--border] text-sm text-[--text-muted]">
+                                {formatDate(activeNote.updatedAt)} • {activeNote.content ? activeNote.content.replace(/<[^>]*>/g, '').length : 0} characters
+                            </div>
                         </div>
 
                         <div className={`save-status ${isSaving ? 'visible' : ''}`}>
