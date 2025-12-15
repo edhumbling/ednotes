@@ -388,7 +388,7 @@ export default function Home() {
                 {activeNote ? (
                     <>
                         <header className="editor-header">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3" style={{ width: '60px' }}> {/* Fixed width for balance */}
                                 {/* Mobile Menu Button */}
                                 <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
                                     <Menu size={24} />
@@ -402,7 +402,18 @@ export default function Home() {
                                 )}
                             </div>
 
-                            <div className="editor-actions">
+                            {/* Centered Logo */}
+                            <div className="flex-1 flex justify-center items-center pointer-events-none select-none">
+                                <Image
+                                    src="https://ik.imagekit.io/humbling/Gemini_Generated_Image_o1mdo6o1mdo6o1md%20(1).png"
+                                    alt="Logo"
+                                    width={28} height={28}
+                                    className="sidebar-logo"
+                                    style={{ opacity: 0.8 }}
+                                />
+                            </div>
+
+                            <div className="editor-actions" style={{ width: '60px', justifyContent: 'flex-end' }}> {/* Fixed width to balance left side */}
                                 <button className="icon-btn danger" onClick={() => confirmDelete(activeNote.id)}>
                                     <Trash2 size={18} />
                                 </button>
