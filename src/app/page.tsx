@@ -99,15 +99,21 @@ export default function Home() {
             const data = await res.json();
             setNotes(data);
 
-            // Attempt to restore last active note
-            const lastId = localStorage.getItem('ednotes-active-id');
+            // 1. Priority: Check URL query param
+            const params = new URLSearchParams(window.location.search);
+            const urlId = params.get('id');
+
+            // 2. Fallback: Check localStorage
+            const lastId = urlId || localStorage.getItem('ednotes-active-id');
+
             if (lastId) {
                 const found = data.find((n: Note) => n.id === lastId);
                 if (found) {
-                    // We manually select properly to avoid side-effects like closing sidebar prematurely on load
                     setActiveNote(found);
                     setTitle(found.title === 'Untitled' ? '' : found.title);
                     setContent(found.content);
+                    // Ensure URL is synced if we loaded from localStorage
+                    if (!urlId) window.history.replaceState(null, '', `/?id=${found.id}`);
                 }
             }
         } catch (error) {
@@ -209,6 +215,7 @@ export default function Home() {
                     setTitle('');
                     setContent('');
                     if (editorRef.current) editorRef.current.innerHTML = '';
+                    window.history.replaceState(null, '', '/');
                 }
             }
         } catch (error) {
@@ -225,6 +232,8 @@ export default function Home() {
         setContent(note.content);
         if (editorRef.current) editorRef.current.innerHTML = note.content;
         if (isMobile) setSidebarOpen(false);
+        // Update URL
+        window.history.replaceState(null, '', `/?id=${note.id}`);
     };
 
     const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -307,6 +316,7 @@ export default function Home() {
                             setContent('');
                             if (editorRef.current) editorRef.current.innerHTML = '';
                             if (isMobile) setSidebarOpen(false);
+                            window.history.replaceState(null, '', '/');
                         }}
                     >
                         <div style={{ position: 'relative', width: 32, height: 32, flexShrink: 0 }}>
