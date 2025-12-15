@@ -123,12 +123,14 @@ export default function Home() {
 
     // Persist Active Note ID
     useEffect(() => {
+        if (isLoading) return; // Don't wipe storage while initially loading
+
         if (activeNote) {
             localStorage.setItem('ednotes-active-id', activeNote.id);
         } else {
             localStorage.removeItem('ednotes-active-id');
         }
-    }, [activeNote]);
+    }, [activeNote, isLoading]);
 
     useEffect(() => {
         if (!isLoading && notes.length === 0 && !activeNote) {
