@@ -261,7 +261,8 @@ body {
     color: var(--text-muted);
     padding: 4px;
     cursor: pointer;
-    opacity: 0;
+    opacity: 1;
+    /* Always visible */
     transition: opacity 0.2s, color 0.2s;
     border-radius: 0px;
     display: flex;

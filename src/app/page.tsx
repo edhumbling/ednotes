@@ -60,8 +60,7 @@ export default function Home() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [isMobile, setIsMobile] = useState(false);
 
-    // Menu & Modal State
-    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    // Modal State
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
 
@@ -194,17 +193,11 @@ export default function Home() {
 
     const confirmDelete = (noteId: string) => {
         setNoteToDelete(noteId);
-        // Note: We deliberately do NOT close the menu here.
-        // Keeping it component mounted ensures the click event finishes propagation properly.
-        // The Modal (z-9999) will simply overlay the menu (z-50).
         setIsDeleteModalOpen(true);
     };
 
     const handleDelete = async () => {
         if (!noteToDelete) return;
-
-        // NOW we can safely close the menu as the user has confirmed logic
-        setOpenMenuId(null);
 
         try {
             await fetch(`/api/notes/${noteToDelete}`, { method: 'DELETE' });
@@ -263,11 +256,6 @@ export default function Home() {
         handleContentInput();
     };
 
-    const toggleMenu = (e: React.MouseEvent, noteId: string) => {
-        e.stopPropagation();
-        setOpenMenuId(openMenuId === noteId ? null : noteId);
-    };
-
     const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
     // --- Components ---
@@ -289,21 +277,10 @@ export default function Home() {
                 onClick={() => setSidebarOpen(false)}
             />
 
-            {/* Global Backdrop to Close Menus */}
-            {openMenuId && (
-                <div
-                    className="dropdown-backdrop"
-                    onClick={() => setOpenMenuId(null)}
-                />
-            )}
-
             {/* Delete Confirmation Modal */}
             <Modal
                 isOpen={isDeleteModalOpen}
-                onClose={() => {
-                    setIsDeleteModalOpen(false);
-                    setOpenMenuId(null); // Close menu on cancel
-                }}
+                onClose={() => setIsDeleteModalOpen(false)}
                 onConfirm={handleDelete}
                 title="Delete Note"
                 message="Are you sure you want to delete this note? This action cannot be undone."
@@ -403,26 +380,15 @@ export default function Home() {
                                             </div>
 
                                             <button
-                                                className={`note-actions-btn ${openMenuId === note.id ? 'active' : ''}`}
-                                                onClick={(e) => toggleMenu(e, note.id)}
+                                                className="note-actions-btn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    confirmDelete(note.id);
+                                                }}
+                                                title="Delete Note"
                                             >
-                                                <MoreVertical size={16} />
+                                                <Trash2 size={16} />
                                             </button>
-
-                                            {openMenuId === note.id && (
-                                                <div className="dropdown-menu" onClick={(e) => e.stopPropagation()}>
-                                                    <button
-                                                        className="dropdown-item danger"
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            e.stopPropagation();
-                                                            confirmDelete(note.id);
-                                                        }}
-                                                    >
-                                                        <Trash2 size={14} /> Delete
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
                                     ))}
                                 </div>
