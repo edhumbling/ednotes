@@ -389,11 +389,21 @@ export default function Home() {
                             </div>
 
                             <div className="toolbar-group">
+                                <select
+                                    className="toolbar-select"
+                                    onChange={(e) => execCmd('fontName', e.target.value)}
+                                    defaultValue="Inter"
+                                    title="Font Family"
+                                >
+                                    <option value="Inter">Default</option>
+                                    <option value="serif">Serif</option>
+                                    <option value="'Fira Code', monospace">Mono</option>
+                                    <option value="cursive">Handwriting</option>
+                                </select>
                                 <ToolbarButton icon={Heading1} cmd="formatBlock" val="h1" title="Heading 1" />
                                 <ToolbarButton icon={Heading2} cmd="formatBlock" val="h2" title="Heading 2" />
                                 <ToolbarButton icon={Type} cmd="formatBlock" val="p" title="Paragraph" />
                             </div>
-
                             <div className="toolbar-group">
                                 <ToolbarButton icon={List} cmd="insertUnorderedList" title="Bullet List" />
                                 <ToolbarButton icon={ListOrdered} cmd="insertOrderedList" title="Numbered List" />
