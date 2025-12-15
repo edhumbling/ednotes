@@ -192,8 +192,14 @@ export default function Home() {
         }
     };
 
+    // Auto-close menu when modal opens
+    useEffect(() => {
+        if (isDeleteModalOpen) {
+            setOpenMenuId(null);
+        }
+    }, [isDeleteModalOpen]);
+
     const confirmDelete = (noteId: string) => {
-        // Keep menu open to ensure event completes. Modal will cover it.
         setNoteToDelete(noteId);
         setIsDeleteModalOpen(true);
     };
@@ -201,7 +207,7 @@ export default function Home() {
     const handleDelete = async () => {
         if (!noteToDelete) return;
 
-        // Close menu now
+        // Explicit menu close for safety
         setOpenMenuId(null);
 
         try {
@@ -298,10 +304,7 @@ export default function Home() {
             {/* Delete Confirmation Modal */}
             <Modal
                 isOpen={isDeleteModalOpen}
-                onClose={() => {
-                    setIsDeleteModalOpen(false);
-                    setOpenMenuId(null);
-                }}
+                onClose={() => setIsDeleteModalOpen(false)}
                 onConfirm={handleDelete}
                 title="Delete Note"
                 message="Are you sure you want to delete this note? This action cannot be undone."
