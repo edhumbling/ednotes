@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { notes } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { desc } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET all notes
@@ -18,11 +18,13 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { title, content } = body;
+        const { id, title, content, updatedAt } = body;
 
         const newNote = await db.insert(notes).values({
+            id: id || undefined,
             title: title || 'Untitled',
             content: content || '',
+            updatedAt: updatedAt ? new Date(updatedAt) : new Date(),
         }).returning();
 
         return NextResponse.json(newNote[0]);

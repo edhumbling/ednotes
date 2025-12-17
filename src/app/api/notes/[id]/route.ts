@@ -37,7 +37,7 @@ export async function PUT(
             .set({
                 title,
                 content,
-                updatedAt: new Date(),
+                updatedAt: body.updatedAt ? new Date(body.updatedAt) : new Date(),
             })
             .where(eq(notes.id, id))
             .returning();

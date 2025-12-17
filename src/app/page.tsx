@@ -8,16 +8,12 @@ import {
     List, ListOrdered, Quote,
     Heading1, Heading2, Type,
     Trash2, Menu, Plus, X,
-    MoreVertical, PanelLeftClose, PanelLeftOpen
+    PanelLeftClose, PanelLeftOpen,
+    Cloud, CloudOff, RefreshCcw
 } from 'lucide-react';
-
-interface Note {
-    id: string;
-    title: string;
-    content: string;
-    createdAt: string;
-    updatedAt: string;
-}
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db, LocalNote } from '@/lib/db/local-db';
+import { v4 as uuidv4 } from 'uuid';
 
 // Custom Modal Component
 interface ModalProps {
@@ -49,12 +45,22 @@ const Modal = ({ isOpen, onClose, onConfirm, title, message, confirmText = 'Conf
 };
 
 export default function Home() {
-    const [notes, setNotes] = useState<Note[]>([]);
-    const [activeNote, setActiveNote] = useState<Note | null>(null);
+    // Local DB Query
+    const notes = useLiveQuery(
+        () => db.notes.where('isDeleted').equals(0).toArray(),
+        []
+    ) || [];
+
+    // Sort notes locally
+    const sortedNotes = [...notes].sort((a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+
+    const [activeNote, setActiveNote] = useState<LocalNote | null>(null);
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('synced');
 
     // Sidebar State
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -67,6 +73,7 @@ export default function Home() {
     const editorRef = useRef<HTMLDivElement>(null);
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+    // --- Responsive Management ---
     useEffect(() => {
         const checkMobile = () => {
             const mobile = window.innerWidth <= 768;
@@ -77,6 +84,82 @@ export default function Home() {
         window.addEventListener('resize', checkMobile);
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
+
+    // --- Sync Logic ---
+    const runSync = useCallback(async () => {
+        if (!navigator.onLine) {
+            setSyncStatus('offline');
+            return;
+        }
+
+        setSyncStatus('syncing');
+
+        try {
+            // 1. Push local changes to server
+            const unsyncedNotes = await db.notes.where('synced').equals(0).toArray();
+
+            for (const note of unsyncedNotes) {
+                if (note.isDeleted) {
+                    // Try to delete from server
+                    try {
+                        const res = await fetch(`/api/notes/${note.id}`, { method: 'DELETE' });
+                        if (res.ok || res.status === 404) {
+                            await db.notes.delete(note.id);
+                        }
+                    } catch (e) { console.error('Delete sync failed', e); }
+                } else {
+                    // Push update/creation
+                    try {
+                        const res = await fetch(`/api/notes`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                id: note.id,
+                                title: note.title,
+                                content: note.content,
+                                updatedAt: note.updatedAt
+                            }),
+                        });
+                        if (res.ok) {
+                            await db.notes.update(note.id, { synced: 1 });
+                        }
+                    } catch (e) { console.error('Update sync failed', e); }
+                }
+            }
+
+            // 2. Pull changes from server
+            const res = await fetch('/api/notes');
+            if (res.ok) {
+                const serverNotes = await res.json();
+                for (const sNote of serverNotes) {
+                    const local = await db.notes.get(sNote.id);
+                    if (!local || (new Date(sNote.updatedAt) > new Date(local.updatedAt) && local.synced === 1)) {
+                        await db.notes.put({
+                            ...sNote,
+                            synced: 1,
+                            isDeleted: 0
+                        });
+                    }
+                }
+            }
+
+            setSyncStatus('synced');
+        } catch (error) {
+            console.error('Sync error:', error);
+            setSyncStatus('offline');
+        }
+    }, []);
+
+    // Periodic Sync
+    useEffect(() => {
+        runSync();
+        const interval = setInterval(runSync, 30000); // Every 30 seconds
+        window.addEventListener('online', runSync);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('online', runSync);
+        };
+    }, [runSync]);
 
     // Format date
     const formatDate = (dateString: string) => {
@@ -91,57 +174,30 @@ export default function Home() {
         });
     };
 
-    // --- Data Fetching ---
-    const fetchNotes = async () => {
-        try {
-            const res = await fetch('/api/notes');
-            const data = await res.json();
-            setNotes(data);
-
-            // 1. Priority: Check URL query param
-            const params = new URLSearchParams(window.location.search);
-            const urlId = params.get('id');
-
-            // 2. Fallback: Check localStorage
-            const lastId = urlId || localStorage.getItem('ednotes-active-id');
-
-            if (lastId) {
-                const found = data.find((n: Note) => n.id === lastId);
-                if (found) {
-                    setActiveNote(found);
-                    setTitle(found.title === 'Untitled' ? '' : found.title);
-                    setContent(found.content);
-                    // Ensure URL is synced if we loaded from localStorage
-                    if (!urlId) window.history.replaceState(null, '', `/?id=${found.id}`);
-                }
-            }
-        } catch (error) {
-            console.error('Failed to fetch notes:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
+    // Initial load and persistence of active note
     useEffect(() => {
-        fetchNotes();
+        const lastId = new URLSearchParams(window.location.search).get('id') || localStorage.getItem('ednotes-active-id');
+        if (lastId) {
+            db.notes.get(lastId).then(note => {
+                if (note && !note.isDeleted) {
+                    setActiveNote(note);
+                    setTitle(note.title === 'Untitled' ? '' : note.title);
+                    setContent(note.content);
+                    if (editorRef.current) editorRef.current.innerHTML = note.content;
+                }
+            });
+        }
     }, []);
 
-    // Persist Active Note ID
     useEffect(() => {
-        if (isLoading) return; // Don't wipe storage while initially loading
-
         if (activeNote) {
             localStorage.setItem('ednotes-active-id', activeNote.id);
+            window.history.replaceState(null, '', `/?id=${activeNote.id}`);
         } else {
             localStorage.removeItem('ednotes-active-id');
+            window.history.replaceState(null, '', '/');
         }
-    }, [activeNote, isLoading]);
-
-    useEffect(() => {
-        if (!isLoading && notes.length === 0 && !activeNote) {
-            createNewNote();
-        }
-    }, [isLoading, notes.length, activeNote]);
+    }, [activeNote]);
 
     // --- Title Sync ---
     useEffect(() => {
@@ -151,44 +207,48 @@ export default function Home() {
     }, [activeNote]);
 
     // --- Saving Logic ---
-    const saveNote = useCallback(async (noteId: string, noteTitle: string, noteContent: string) => {
-        try {
-            setIsSaving(true);
-            await fetch(`/api/notes/${noteId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: noteTitle || 'Untitled', content: noteContent }),
-            });
-            fetchNotes();
-        } catch (error) {
-            console.error('Failed to save note:', error);
-        } finally {
-            setTimeout(() => setIsSaving(false), 500);
+    const saveToDB = useCallback(async (noteId: string, noteTitle: string, noteContent: string) => {
+        setIsSaving(true);
+        const updatedAt = new Date().toISOString();
+        await db.notes.update(noteId, {
+            title: noteTitle,
+            content: noteContent,
+            updatedAt,
+            synced: 0
+        });
+
+        // Update active note record if it's the same
+        if (activeNote?.id === noteId) {
+            setActiveNote(prev => prev ? { ...prev, title: noteTitle, content: noteContent, updatedAt } : null);
         }
-    }, []);
+
+        setTimeout(() => {
+            setIsSaving(false);
+            runSync(); // Immediate background sync attempt
+        }, 500);
+    }, [activeNote, runSync]);
 
     const debouncedSave = useCallback((noteId: string, noteTitle: string, noteContent: string) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(() => {
-            saveNote(noteId, noteTitle, noteContent);
+            saveToDB(noteId, noteTitle, noteContent);
         }, 1000);
-    }, [saveNote]);
+    }, [saveToDB]);
 
     // --- Actions ---
     const createNewNote = async () => {
-        try {
-            const res = await fetch('/api/notes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: 'Untitled', content: '' }),
-            });
-            const newNote = await res.json();
-            setNotes(prev => [newNote, ...prev]);
-            selectNote(newNote);
-            if (isMobile) setSidebarOpen(false);
-        } catch (error) {
-            console.error('Failed to create:', error);
-        }
+        const newNote: LocalNote = {
+            id: uuidv4(),
+            title: 'Untitled',
+            content: '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            synced: 0,
+            isDeleted: 0
+        };
+        await db.notes.add(newNote);
+        selectNote(newNote);
+        if (isMobile) setSidebarOpen(false);
     };
 
     const confirmDelete = (noteId: string) => {
@@ -199,45 +259,32 @@ export default function Home() {
     const handleDelete = async () => {
         if (!noteToDelete) return;
 
-        try {
-            await fetch(`/api/notes/${noteToDelete}`, { method: 'DELETE' });
-            const remaining = notes.filter(n => n.id !== noteToDelete);
-            setNotes(remaining);
+        await db.notes.update(noteToDelete, { isDeleted: 1, synced: 0 });
 
-            if (activeNote?.id === noteToDelete) {
-                if (remaining.length > 0) {
-                    selectNote(remaining[0]);
-                } else {
-                    setActiveNote(null);
-                    setTitle('');
-                    setContent('');
-                    if (editorRef.current) editorRef.current.innerHTML = '';
-                    window.history.replaceState(null, '', '/');
-                }
-            }
-        } catch (error) {
-            console.error('Failed to delete:', error);
-        } finally {
-            setIsDeleteModalOpen(false);
-            setNoteToDelete(null);
+        if (activeNote?.id === noteToDelete) {
+            setActiveNote(null);
+            setTitle('');
+            setContent('');
+            if (editorRef.current) editorRef.current.innerHTML = '';
         }
+
+        setIsDeleteModalOpen(false);
+        setNoteToDelete(null);
+        runSync(); // Trigger delete sync
     };
 
-    const selectNote = (note: Note) => {
+    const selectNote = (note: LocalNote) => {
         setActiveNote(note);
         setTitle(note.title === 'Untitled' ? '' : note.title);
         setContent(note.content);
         if (editorRef.current) editorRef.current.innerHTML = note.content;
         if (isMobile) setSidebarOpen(false);
-        // Update URL
-        window.history.replaceState(null, '', `/?id=${note.id}`);
     };
 
     const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newTitle = e.target.value;
         setTitle(newTitle);
         if (activeNote) {
-            setActiveNote({ ...activeNote, title: newTitle });
             debouncedSave(activeNote.id, newTitle, content);
         }
     };
@@ -300,7 +347,6 @@ export default function Home() {
                             setContent('');
                             if (editorRef.current) editorRef.current.innerHTML = '';
                             if (isMobile) setSidebarOpen(false);
-                            window.history.replaceState(null, '', '/');
                         }}
                     >
                         <div style={{ position: 'relative', width: 32, height: 32, flexShrink: 0 }}>
@@ -310,6 +356,7 @@ export default function Home() {
                                 fill
                                 className="sidebar-logo"
                                 style={{ objectFit: 'cover', borderRadius: '0px' }}
+                                priority
                             />
                         </div>
                         <span className="sidebar-title flex-1 truncate text-base font-semibold">Ed&apos;s Notes</span>
@@ -344,7 +391,7 @@ export default function Home() {
                         const lastWeek = today - 86400000 * 7;
                         const lastMonth = today - 86400000 * 30;
 
-                        const groups: { [key: string]: Note[] } = {
+                        const groups: { [key: string]: LocalNote[] } = {
                             'Today': [],
                             'Yesterday': [],
                             'Last 7 Days': [],
@@ -352,7 +399,7 @@ export default function Home() {
                             'Older': []
                         };
 
-                        notes.forEach(note => {
+                        sortedNotes.forEach(note => {
                             const noteDate = new Date(note.updatedAt).getTime();
                             if (noteDate >= today) groups['Today'].push(note);
                             else if (noteDate >= yesterday) groups['Yesterday'].push(note);
@@ -395,6 +442,14 @@ export default function Home() {
                             )
                         ));
                     })()}
+                </div>
+
+                {/* Sync Indicator in Sidebar Bottom */}
+                <div className="mt-auto p-4 border-t border-[--border] flex items-center gap-2 text-xs text-[--text-muted]">
+                    {syncStatus === 'syncing' && <RefreshCcw size={14} className="animate-spin text-blue-400" />}
+                    {syncStatus === 'synced' && <Cloud size={14} className="text-green-400" />}
+                    {syncStatus === 'offline' && <CloudOff size={14} className="text-amber-400" />}
+                    <span className="capitalize">{syncStatus}</span>
                 </div>
             </aside>
 
@@ -520,7 +575,6 @@ export default function Home() {
                     </>
                 ) : (
                     <div className="empty-state">
-                        {/* No logo here, it's in the header now */}
                         <p>Select a note or create a new one</p>
                         <button className="new-note-btn" style={{ width: 'auto', padding: '10px 24px' }} onClick={createNewNote}>
                             Create Note
